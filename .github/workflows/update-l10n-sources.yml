@@ -47,12 +47,14 @@ jobs:
 
       - name: Upload sources and download translations 🌐
         if: env.NUM_DIFFS > 1
-        uses: crowdin/github-action@1.1.0
+        uses: crowdin/github-action@1.2.0
         with:
           upload_sources: true
           upload_translations: false
           download_translations: true
+          commit_message: "feat: new translations"
           create_pull_request: true
+          pull_request_title: "feat: new translations"
           pull_request_labels: l10n
           config: ./crowdin.yml
           source: locale/en_GB/LC_MESSAGES/pdf_bot.po
