@@ -1,0 +1,120 @@
+name: GitHub Actions
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Python 🐍
+        id: setup-python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Poetry 📦
+        uses: snok/install-poetry@v1.4.2
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache virtual environment 💾
+        uses: actions/cache@v6.1.0
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-
+
+      - name: Install dependencies ⚙️
+        run: poetry install --no-interaction
+
+      - name: Run Tests 🧪
+        run: |
+          source .venv/bin/activate
+          pybabel compile -D pdf_bot -d locale
+          pytest --cov --cov-report=xml
+
+      - name: Upload coverage report 📡
+        uses: codecov/codecov-action@v7.1.1
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Python 🐍
+        id: setup-python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Poetry 📦
+        uses: snok/install-poetry@v1.4.2
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache virtual environment 💾
+        uses: actions/cache@v6.1.0
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-
+
+      - name: Install dependencies ⚙️
+        run: poetry install --no-interaction --no-root
+
+      - name: Run linting 🧪
+        run: |
+          source .venv/bin/activate
+          pre-commit run --all-files
+
+  check-docker-image:
+    name: Check Docker image
+    runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/master' }}
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v7.0.1
+
+      - name: Build Docker image 🏗
+        run: |-
+          docker build .
+
+  check-pyenv:
+    name: Check pyenv
+    runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/master' }}
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v7.0.1
+
+      - name: Check Python version in pyenv 🐍
+        run: |
+          curl https://pyenv.run | bash
+          export PYENV_ROOT="$HOME/.pyenv"
+          command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init -)"
+          pyenv install

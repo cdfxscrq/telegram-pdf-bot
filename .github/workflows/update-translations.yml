@@ -1,0 +1,42 @@
+name: Update Translations
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  update-translations:
+    name: Update Translations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App token 🔑
+        id: app-token
+        uses: actions/create-github-app-token@v3.3.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+      - name: Checkout 🛎️
+        uses: actions/checkout@v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Download translations 🌐
+        uses: crowdin/github-action@v3.6.0
+        with:
+          upload_sources: false
+          upload_translations: false
+          download_translations: true
+          commit_message: "fix: new translations"
+          create_pull_request: true
+          pull_request_title: "fix: new translations"
+          pull_request_labels: l10n
+          config: ./crowdin.yml
+          source: locale/en_GB/LC_MESSAGES/pdf_bot.po
+          translation: /locale/%locale_with_underscore%/LC_MESSAGES/pdf_bot.po
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}

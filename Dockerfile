@@ -1,25 +1,39 @@
-FROM python:3.9.5
+FROM --platform=linux/amd64 python:3.14.10-slim AS build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils=0.71.* libcairo2=1.16.* libpango-1.0-0=1.42.* \
-    libpangocairo-1.0-0=1.42.* libgdk-pixbuf2.0-0=2.38.* libffi-dev=3.2.* shared-mime-info=1.10-* ocrmypdf=8.0.* \
+ARG COMMIT_HASH
+
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends g++ gcc git libcairo2-dev \
+    pkg-config python3-dev
+
+RUN pip install -U pip && pip install poetry
+COPY pyproject.toml poetry.lock ./
+
+RUN poetry config virtualenvs.in-project true \
+    && poetry install --only main --no-root --no-interaction
+ENV PATH="/build/.venv/bin:${PATH}"
+
+COPY locale locale/
+RUN pybabel compile -D pdf_bot -d locale \
+    && find locale -type f -name '*.po' -delete
+
+FROM --platform=linux/amd64 python:3.14.10-slim AS deploy
+
+ARG COMMIT_HASH
+ENV SENTRY_RELEASE $COMMIT_HASH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ghostscript libpango-1.0-0 \
+    libpangoft2-1.0-0 ocrmypdf poppler-utils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /bot
-COPY . /bot
-RUN pip install -r requirements.txt
+WORKDIR /app
 
-RUN pybabel compile -D pdf_bot -d locale
+COPY --from=build /build/.venv/ /build/.venv/
+ENV PATH="/build/.venv/bin:${PATH}"
 
-EXPOSE ${PORT}
+COPY --from=build /build/locale /app/locale/
+COPY pdf_bot pdf_bot/
 
-ENV APP_URL ${APP_URL}
-ENV TELE_TOKEN ${TELE_TOKEN}
-ENV DEV_TELE_ID ${DEV_TELE_ID}
-ENV GCP_CRED ${GCP_CRED}
-ENV GCP_KEY ${GCP_KEY}
-ENV SLACK_TOKEN ${SLACK_TOKEN}
-ENV STRIPE_TOKEN ${STRIPE_TOKEN}
-
-CMD ["python", "bot.py"]
+CMD ["python", "-m", "pdf_bot"]
